@@ -46,8 +46,8 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 # We keep the .so here (and not in a -devel subpackage) because it is actually
 # a module.
-%{_libdir}/libSimpleProxyUtils.so
-%{python_sitelib}/simple_proxy_utils.py
+%{_libdir}/libSimpleProxyUtils.so*
+%{python_sitearch}/simple_proxy_utils.py*
 
 %changelog
 * Sat Oct 27 2018 Brian Bockelman <bbockelm@cse.unl.edu> - 0.1.0-1
