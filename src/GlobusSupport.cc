@@ -21,7 +21,7 @@
 std::mutex initializer_mutex;
 bool g_globus_initialized = false;
 char *g_cert_dir = nullptr;
-
+std::string g_globus_activate_err;
 
 inline uint64_t monotonic_time() {
   struct timespec tp;
@@ -122,8 +122,28 @@ bool globus_deactivate() {
 }
 
 
+bool globus_status(char **err_msg) {
+  std::lock_guard<std::mutex> guard(initializer_mutex);
+  if (!g_globus_initialized && err_msg) {
+    *err_msg = strdup(g_globus_activate_err.c_str());
+  }
+  return g_globus_initialized;
+}
+
 namespace {
 struct GlobusCleanup {
+  GlobusCleanup() {
+    char *err_msg;
+    if (!globus_activate(&err_msg)) {
+      std::lock_guard<std::mutex> guard(initializer_mutex);
+      if (err_msg) {
+        g_globus_activate_err = err_msg;
+        free(err_msg);
+      } else {
+        g_globus_activate_err = "Unknown Globus activation error";
+      }
+    }
+  }
   ~GlobusCleanup() {globus_deactivate();}
 };
 GlobusCleanup cleanup_helper;
@@ -435,6 +455,7 @@ struct authz_state
 
 bool globus_verify(X509* cert, STACK_OF(X509)* chain, char** dn, char** err_msg)
 {
+  if (!globus_status(err_msg)) {return false;}
   if (dn) {*dn = NULL;}
 
   authz_state state;
@@ -521,6 +542,7 @@ bool globus_verify(X509* cert, STACK_OF(X509)* chain, char** dn, char** err_msg)
 
 bool globus_get_cert_and_chain(const char * creds, size_t credslen, X509 **cert, STACK_OF(X509) **chain, char **err_msg)
 {
+  if (!globus_status(err_msg)) {return false;}
   if (cert) {*cert = nullptr;}
   if (chain) {*chain = nullptr;}
 
