@@ -1,6 +1,7 @@
 {
 global:
   chain_verify*;
+  fqans_free*;
 
 local:
   *;

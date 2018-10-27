@@ -19,8 +19,8 @@
  * - `cert` is the base64-encoded certificate chain.
  * - On success, if output variable `identity` is not null, it
  *   will be set to the proxy chain identity ("the DN").
- * - On success, if output variable `voms` is not null, it will
- *   be set to a list of VOMS FQANs.
+ * - On success, if output variable `fqans` is not null, it will
+ *   be set to a list of VOMS FQANs of length `fqans_count`.
  * - Returns non-zero on failure and sets output variable `err_msg`
  *   (if `err_msg` is not NULL); returns 0 otherwise.
  *
@@ -29,7 +29,7 @@
  * will only be set on success.
  */
 extern "C" int
-chain_verify(const char *cert, char **ident, char ***fqans, char **err_msg)
+chain_verify(const char *cert, char **ident, char ***fqans, int *fqans_count, char **err_msg)
 {
     int retval = 1;
     int voms_errcode = 0;
@@ -59,9 +59,10 @@ chain_verify(const char *cert, char **ident, char ***fqans, char **err_msg)
         goto cleanup;
     }
 
-    // Parse VOMS data and append that.
+    // Parse VOMS data and append that.  Note that the lack of a VOMS extension (VERR_NOEXT) is not
+    // fatal in our context.
     voms_ptr = VOMS_Init(NULL, NULL);
-    if (!VOMS_Retrieve(cert_ptr, cert_chain, RECURSE_CHAIN, voms_ptr, &voms_errcode))
+    if (!VOMS_Retrieve(cert_ptr, cert_chain, RECURSE_CHAIN, voms_ptr, &voms_errcode) && voms_errcode != VERR_NOEXT)
     {
         if (err_msg) {
             char *voms_err_msg = VOMS_ErrorMessage(voms_ptr, voms_errcode, NULL, 0);
@@ -70,29 +71,38 @@ chain_verify(const char *cert, char **ident, char ***fqans, char **err_msg)
         goto cleanup;
     }
 
-    for (int idx = 0; voms_ptr->data[idx] != nullptr; idx++)
-    {
-        struct voms *it = voms_ptr->data[idx];
-        if (!it->voname) {continue;}
-        std::string key = it->voname;
-        key += ":";
-        for (int idx2 = 0; it->std[idx2] != nullptr; idx2++)
+    if (voms_errcode != VERR_NOEXT) {
+        for (int idx = 0; voms_ptr->data[idx] != nullptr; idx++)
         {
-            struct data *it2 = it->std[idx2];
-            if (!it2->group) {continue;}
-            key += it2->group;
-            // Log the role, provided it is present and not the word "NULL".
-            if ((it2->role) && strcmp(it2->role, "NULL"))
+            struct voms *it = voms_ptr->data[idx];
+            if (!it->voname) {continue;}
+            std::string base_key = "/";
+            base_key +=  it->voname;
+            base_key += "/";
+            for (int idx2 = 0; it->std[idx2] != nullptr; idx2++)
             {
-                key += "/Role=";
-                key += it2->role;
+                struct data *it2 = it->std[idx2];
+                if (!it2->group) {continue;}
+                std::string key = it2->group;
+
+                // Sanity check: does the group name make sense?  It must start with "/voname"
+                if (key.size() + 1 < base_key.size()) {continue;} // group name is too short.
+                if (key.size() + 1 == base_key.size() && strncmp(key.c_str(), base_key.c_str(), key.size())) {continue;}
+                if (key.size() + 1 > base_key.size() && strncmp(key.c_str(), base_key.c_str(), base_key.size())) {continue;}
+
+                // Log the role, provided it is present and not the word "NULL".
+                if ((it2->role) && strcmp(it2->role, "NULL"))
+                {
+                    key += "/Role=";
+                    key += it2->role;
+                }
+                endorsements.push_back(key);
             }
-            endorsements.push_back(key);
         }
     }
 
     // Return identity and VOMS FQANs.
-    if (fqans) {
+    if (fqans && fqans_count) {
         fqan_list = static_cast<char**>(malloc((endorsements.size() + 1) * sizeof(char *)));
         if (!fqan_list) {
             if (err_msg) *err_msg = strdup("Failed to allocate memory for resulting FQANs.");
@@ -107,6 +117,7 @@ chain_verify(const char *cert, char **ident, char ***fqans, char **err_msg)
         }
         fqan_list[endorsements.size()] = '\0';
         *fqans = fqan_list;
+        *fqans_count = endorsements.size();
         fqan_list = NULL;
     }
     if (ident) {
@@ -132,3 +143,12 @@ cleanup:
     return retval;
 }
 
+//
+// Free up the returns FQANs structure contents.
+extern "C" void
+fqans_free(char **fqans) {
+    for (auto idx = 0; fqans[idx]; idx++) {
+            free(fqans[idx]);
+    }
+    free(fqans);
+}
