@@ -17,6 +17,10 @@ def __get_lib():
         return __lib_handle
 
 
+class ProxyVerifyException(Exception):
+    pass
+
+
 def chain_verify(cert_pem):
     """
     Given the text representation of a cert chain, verify it is valid
@@ -31,9 +35,17 @@ def chain_verify(cert_pem):
     chain_verify.restype = ctypes.c_int
     err_msg = ctypes.c_char_p()
     ident = ctypes.c_char_p()
-    retval = lib.chain_verify(cert_pem, ident, None, ctypes.byref(err_msg))
-    print retval, err_msg.value
-
+    fqans_ptr = ctypes.POINTER(ctypes.c_char_p)()
+    fqans_count = ctypes.c_int()
+    retval = lib.chain_verify(cert_pem, ctypes.byref(ident), ctypes.byref(fqans_ptr), ctypes.byref(fqans_count), ctypes.byref(err_msg))
+    fqans = []
+    for idx in range(fqans_count.value):
+        fqans.append(fqans_ptr[idx])
+    if not retval:
+        lib.fqans_free(fqans_ptr)
+    else:
+        raise ProxyVerifyException(err_msg.value)
+    return ident.value, fqans
 
 def main():
     x509_loc = os.environ.get('X509_USER_PROXY')
@@ -43,7 +55,12 @@ def main():
     with open(x509_loc, "r") as fp:
         contents = fp.read()
 
-    print chain_verify(contents)
+    dn, fqans = chain_verify(contents)
+    print "Identity: ", dn
+    if fqans:
+        print "FQANs:"
+        for fqan in fqans:
+            print "-", fqan
 
 if __name__ == '__main__':
     main()
