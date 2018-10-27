@@ -17,7 +17,7 @@ verifies the proxy chain and returns the relevant identity (DN) and VOMS FQANs
 
 Example usage:
 
-```
+```python
 def main():
     # Try to locate the proxy file from the runtime environment
     x509_loc = os.environ.get('X509_USER_PROXY')
