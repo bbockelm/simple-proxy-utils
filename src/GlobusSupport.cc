@@ -513,7 +513,7 @@ bool globus_verify(X509* cert, STACK_OF(X509)* chain, char** dn, char** err_msg)
     globus_print(result, err_msg);
     return false;
   }
-  if (!(cert_type & GLOBUS_GSI_CERT_UTILS_TYPE_EEC)) {
+  if (!(cert_type & GLOBUS_GSI_CERT_UTILS_TYPE_EEC) && !GLOBUS_GSI_CERT_UTILS_IS_INDEPENDENT_PROXY(cert_type)) {
     result = globus_gsi_cert_utils_get_identity_cert(chain, &eec_cert);
     if (GLOBUS_SUCCESS != result) {
       globus_print(result, err_msg);
