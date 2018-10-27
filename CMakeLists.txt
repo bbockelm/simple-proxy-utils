@@ -5,6 +5,7 @@ project( simple-proxy-utils )
 set( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake )
 
 find_package( Voms REQUIRED )
+find_package( PythonInterp REQUIRED )
 
 if( CMAKE_COMPILER_IS_GNUCXX )
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror" )
@@ -29,8 +30,8 @@ set_target_properties(SimpleProxyUtils PROPERTIES LINK_FLAGS "-Wl,--version-scri
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/chain_verify_test
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/chain_verify_test.py ${CMAKE_CURRENT_BINARY_DIR}/chain_verify_test
-    MAIN_DEPENDENCY ${PROJECT_SOURCE_DIR}/src/chain_verify_test.py)
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/simple_proxy_utils.py ${CMAKE_CURRENT_BINARY_DIR}/chain_verify_test
+    MAIN_DEPENDENCY ${PROJECT_SOURCE_DIR}/src/simple_proxy_utils.py)
 add_custom_target(python ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/chain_verify_test)
 
 if (NOT DEFINED LIB_INSTALL_DIR)
@@ -40,6 +41,10 @@ endif()
 install(
   TARGETS SimpleProxyUtils
   LIBRARY DESTINATION ${LIB_INSTALL_DIR} )
+
+install(
+  FILES ${CMAKE_SOURCE_DIR}/src/simple_proxy_utils.py
+  DESTINATION ${LIB_INSTALL_DIR}/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}/site-packages/ )
 
 set_target_properties(
   SimpleProxyUtils
