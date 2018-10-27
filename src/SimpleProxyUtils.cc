@@ -50,31 +50,7 @@ chain_verify(const char *cert, char **ident, char ***fqans, char **err_msg)
     cert_len = strlen(cert);
 
     // Parse the certificate chain.
-    cert_bio = BIO_new(BIO_s_mem());
-    if (!cert_bio) {
-        if (err_msg) *err_msg = strdup("Failed to allocate memory for BIO object.");
-        goto cleanup;
-    }
-    if (BIO_write(cert_bio, cert, cert_len) != cert_len) {
-        if (err_msg) *err_msg = strdup("Failed to copy memory to BIO object.");
-        goto cleanup;
-    }
-    while (true) {
-        X509* cert_x509 = PEM_read_bio_X509(cert_bio, NULL, NULL, NULL);
-        if (!cert_x509) {
-            if (err_msg) {
-                char openssl_err_str[120];
-                int err_code = ERR_get_error();
-                char *openssl_err_ptr = ERR_error_string(err_code, openssl_err_str);
-                *err_msg = openssl_err_ptr ? strdup(openssl_err_ptr) : strdup("PEM parsing failed due to unknown reasons");
-            }
-            goto cleanup;
-        }
-        if (!cert_ptr) cert_ptr = cert_x509;
-        else sk_X509_push(cert_chain, cert_x509);
-    }
-    if (!cert_ptr) {
-        if (err_msg) *err_msg = strdup("No certificate provided.");
+    if (!globus_get_cert_and_chain(cert, cert_len, &cert_ptr, &cert_chain, err_msg)) {
         goto cleanup;
     }
 
