@@ -1,9 +1,9 @@
-
 #include <string>
 #include <vector>
 #include <sstream>
 
 #include <string.h>
+#include <stdio.h>
 
 #include <voms/voms_apic.h>
 
@@ -28,6 +28,12 @@
  * freeing the memory with `free`.  The `ident` and `fqans` variables
  * will only be set on success.
  */
+const int FAIL_MEM = 2;
+const int FAIL_CERT_CHAIN = 3;
+const int FAIL_VERIFY_DN = 4;
+const int FAIL_VOMS = 5;
+const int FAIL_FQAN = 6;
+
 extern "C" int
 chain_verify(const char *cert, char **ident, char ***fqans, int *fqans_count, char **err_msg)
 {
@@ -44,6 +50,7 @@ chain_verify(const char *cert, char **ident, char ***fqans, int *fqans_count, ch
 
     if (!(cert_chain = sk_X509_new_null())) {
         if (err_msg) *err_msg = strdup("Failed to allocate memory for X509 chain.");
+        retval = FAIL_MEM;
         goto cleanup;
     }
 
@@ -51,11 +58,13 @@ chain_verify(const char *cert, char **ident, char ***fqans, int *fqans_count, ch
 
     // Parse the certificate chain.
     if (!globus_get_cert_and_chain(cert, cert_len, &cert_ptr, &cert_chain, err_msg)) {
+        retval = FAIL_CERT_CHAIN;
         goto cleanup;
     }
 
     // Start with the DN extraction and proxy verification.
     if (!globus_verify(cert_ptr, cert_chain, &dn, err_msg)) {
+        retval = FAIL_VERIFY_DN;
         goto cleanup;
     }
 
@@ -68,6 +77,7 @@ chain_verify(const char *cert, char **ident, char ***fqans, int *fqans_count, ch
             char *voms_err_msg = VOMS_ErrorMessage(voms_ptr, voms_errcode, NULL, 0);
             *err_msg = voms_err_msg ? voms_err_msg : strdup("VOMS AC retrieval failed");
         }
+        retval = FAIL_VOMS;
         goto cleanup;
     }
 
@@ -106,12 +116,14 @@ chain_verify(const char *cert, char **ident, char ***fqans, int *fqans_count, ch
         fqan_list = static_cast<char**>(malloc((endorsements.size() + 1) * sizeof(char *)));
         if (!fqan_list) {
             if (err_msg) *err_msg = strdup("Failed to allocate memory for resulting FQANs.");
+            retval = FAIL_FQAN;
             goto cleanup;
         }
         for (size_t idx = 0; idx < endorsements.size(); idx++) {
             fqan_list[idx] = strdup(endorsements[idx].c_str());
             if (!fqan_list[idx]) {
                 if (err_msg) *err_msg = strdup("Failed to allocate memory for FQAN.");
+                retval = FAIL_FQAN;
                 goto cleanup;
             }
         }
